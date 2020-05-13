@@ -1,3 +1,4 @@
+{-# LANGUAGE GADTs #-}
 module Lib
     ( someFunc
     ) where
@@ -39,28 +40,60 @@ data MAddress = MAddress { mas :: MSign
 data MSign = Plus | Minus deriving (Eq, Show, Read)
 type MByte = Int
 data MComparison = Less | Equal | Greater deriving (Eq, Show, Read)
-data Opcode = NOP | ADD | SUB | MUL | DIV | NUMCHARHALT | SHIFT | MOVE | LDA
-            | LD1 | LD2 | LD3 | LD4 | LD5 | LD6 | LDX
-            | LDAN | LD1N | LD2N | LD3N | LD4N | LD5N | LD6N | LDXN
-            | STA | ST1 | ST2 | ST3 | ST4 | ST5 | ST6 | STX
-            | STJ | STZ | JBUS | IOC | IN | OUT
-            | JRED | JUMP | JA | J1 | J2 | J3 | J4 | J5 | J6 | JX
-            | IDEA | IDE1 | IDE2 | IDE3 | IDE4 | IDE5 | IDE6 | IDEX
-            | CMPA | CMP1 | CMP2 | CMP3 | CMP4 | CMP5 | CMP6 | CMPX
+
+data Opcode where
+    NOP   :: Opcode
+    ADD   :: Opcode 
+    SUB   :: Opcode 
+    MUL   :: Opcode 
+    DIV   :: Opcode 
+    NCH   :: Opcode 
+    SHIFT :: Opcode 
+    MOVE  :: Opcode 
+    LD    :: Register NotJ -> Opcode
+    LDN   :: Register NotJ -> Opcode
+    ST    :: Register a -> Opcode
+    STZ   :: Opcode
+    JBUS  :: Opcode
+    IOC   :: Opcode
+    IN    :: Opcode
+    OUT   :: Opcode
+    JRED  :: Opcode
+    JUMP  :: Opcode
+    JR    :: (MaybeJ a) => Register a -> Opcode
+    IDE   :: Register NotJ -> Opcode
+    CMP   :: Register NotJ -> Opcode
+
+data Register a where
+    RA  :: Register NotJ
+    RX  :: Register NotJ
+    RI1 :: Register NotJ
+    RI2 :: Register NotJ
+    RI3 :: Register NotJ
+    RI4 :: Register NotJ
+    RI5 :: Register NotJ
+    RI6 :: Register NotJ
+    RJ  :: Register DefJ
+data NotJ = NotJ deriving (Eq, Show, Read)
+data DefJ = DefJ deriving (Eq, Show, Read)
+class MaybeJ a where
+instance MaybeJ NotJ where
+instance MaybeJ DefJ where
+
 data ByteMode = Tens | Twos
 base :: MixMachine -> Int
 base m = case byteMode m of
     Tens -> 100
     Twos -> 64
 
-opcodesInOrder = [ NOP, ADD, SUB, MUL, DIV, NUMCHARHALT, SHIFT, MOVE, LDA
-                 , LD1, LD2, LD3, LD4, LD5, LD6, LDX
-                 , LDAN, LD1N, LD2N, LD3N, LD4N, LD5N, LD6N, LDXN
-                 , STA, ST1, ST2, ST3, ST4, ST5, ST6, STX
-                 , STJ, STZ, JBUS, IOC, IN, OUT
-                 , JRED, JUMP, JA, J1, J2, J3, J4, J5, J6, JX
-                 , IDEA, IDE1, IDE2, IDE3, IDE4, IDE5, IDE6, IDEX
-                 , CMPA, CMP1, CMP2, CMP3, CMP4, CMP5, CMP6, CMPX]
+opcodesInOrder = [ NOP, ADD, SUB, MUL, DIV, NCH, SHIFT, MOVE
+                 , LD RA, LD RI1, LD RI2, LD RI3, LD RI4, LD RI5, LD RI6, LD RX
+                 , LDN RA, LDN RI1, LDN RI2, LDN RI3, LDN RI4, LDN RI5, LDN RI6, LDN RX
+                 , ST RA, ST RI1, ST RI2, ST RI3, ST RI4, ST RI5, ST RI6, ST RX , ST RJ
+                 , STZ, JBUS, IOC, IN, OUT
+                 , JRED, JUMP, JR RA, JR RI1, JR RI2, JR RI3, JR RI4, JR RI5, JR RI6, JR RX
+                 , IDE RA, IDE RI1, IDE RI2, IDE RI3, IDE RI4, IDE RI5, IDE RI6, IDE RX
+                 , CMP RA, CMP RI1, CMP RI2, CMP RI3, CMP RI4, CMP RI5, CMP RI6, CMP RX]
 
 class Wordy a where
     toWord :: a -> MWord
@@ -86,74 +119,32 @@ decodeOpcode b = opcodesInOrder `safeIndex` b
           safeIndex (_:xs) b = xs `safeIndex` (b-1)
 
 stepMachine :: MixMachine -> Either String MixMachine
-stepMachine m = let instr = readInstruction $ contents m $ ip m
-                in case iOpc instr of
-                    NOP -> undefined
-                    ADD -> undefined
-                    SUB -> undefined
-                    MUL -> undefined
-                    DIV -> undefined
-                    NUMCHARHALT -> undefined
-                    SHIFT -> undefined
-                    MOVE -> undefined
-                    LDA -> undefined
-                    LD1 -> undefined
-                    LD2 -> undefined
-                    LD3 -> undefined
-                    LD4 -> undefined
-                    LD5 -> undefined
-                    LD6 -> undefined
-                    LDX -> undefined
-                    LDAN -> undefined
-                    LD1N -> undefined
-                    LD2N -> undefined
-                    LD3N -> undefined
-                    LD4N -> undefined
-                    LD5N -> undefined
-                    LD6N -> undefined
-                    LDXN -> undefined
-                    STA -> undefined
-                    ST1 -> undefined
-                    ST2 -> undefined
-                    ST3 -> undefined
-                    ST4 -> undefined
-                    ST5 -> undefined
-                    ST6 -> undefined
-                    STX -> undefined
-                    STJ -> undefined
-                    STZ -> undefined
-                    JBUS -> undefined
-                    IOC -> undefined
-                    IN -> undefined
-                    OUT -> undefined
-                    JRED -> undefined
-                    JUMP -> undefined
-                    JA -> undefined
-                    J1 -> undefined
-                    J2 -> undefined
-                    J3 -> undefined
-                    J4 -> undefined
-                    J5 -> undefined
-                    J6 -> undefined
-                    JX -> undefined
-                    IDEA -> undefined
-                    IDE1 -> undefined
-                    IDE2 -> undefined
-                    IDE3 -> undefined
-                    IDE4 -> undefined
-                    IDE5 -> undefined
-                    IDE6 -> undefined
-                    IDEX -> undefined
-                    CMPA -> undefined
-                    CMP1 -> undefined
-                    CMP2 -> undefined
-                    CMP3 -> undefined
-                    CMP4 -> undefined
-                    CMP5 -> undefined
-                    CMP6 -> undefined
-                    CMPX -> undefined
-
-
+stepMachine m =
+    let instr = readInstruction $ contents m $ ip m
+    in case instr of
+        Nothing -> Left "bad instruction read"
+        Just i -> case iOpc i of
+            NOP   -> undefined
+            ADD   -> undefined
+            SUB   -> undefined
+            MUL   -> undefined
+            DIV   -> undefined
+            NCH   -> undefined
+            SHIFT -> undefined
+            MOVE  -> undefined
+            LD r  -> undefined
+            LDN r -> undefined
+            ST r  -> undefined
+            STZ   -> undefined
+            JBUS  -> undefined
+            IOC   -> undefined
+            IN    -> undefined
+            OUT   -> undefined
+            JRED  -> undefined
+            JUMP  -> undefined
+            JR r  -> undefined
+            IDE r -> undefined
+            CMP r -> undefined
     where contents m p = memory m !! toNumber (base m) p
           toNumber b (MAddress s b1 b2) =
               (case s of Plus -> 1; Minus -> -1) * (b1 * b + b2)
