@@ -24,6 +24,21 @@ data MixMachine = MixMachine { rA  :: MWord
                              , compareFlag :: MComparison
                              , byteMode :: ByteMode
                              }
+makeMachine memsize bm = MixMachine { rA =zeroWord
+                                    , rX =zeroWord
+                                    , rI1=fromWord zeroWord
+                                    , rI2=fromWord zeroWord
+                                    , rI3=fromWord zeroWord
+                                    , rI4=fromWord zeroWord
+                                    , rI5=fromWord zeroWord
+                                    , rI6=fromWord zeroWord
+                                    , rJ =fromWord zeroWord
+                                    , ip =fromWord zeroWord
+                                    , memory=replicate memsize zeroWord -- TODO: replace with memsize = base^3
+                                    , overflow=False
+                                    , compareFlag=Equal
+                                    , byteMode=bm
+                                    }
 
 getRegister :: MixMachine -> Register a -> MWord
 getRegister m r =
@@ -73,10 +88,12 @@ data MWord = MWord { mws :: MSign
                    , mwb4 :: MByte
                    , mwb5 :: MByte
                    } deriving (Eq, Show, Read)
-plus :: Int64 -> MWord -> MWord -> (MWord, Bool)
+zeroWord = MWord Plus 0 0 0 0 0
+
+plus :: (Wordy a, Wordy b) => Int64 -> a -> b -> (MWord, Bool)
 plus base w1 w2 = (w', o > 0)
-    where x1 = toInt base w1
-          x2 = toInt base w2
+    where x1 = toInt base $ toWord w1
+          x2 = toInt base $ toWord w2
           (w', o) = fromInt base $ x1 + x2
 times :: Int64 -> MWord -> MWord -> (MWord, MWord)
 times base w1 w2 = (w'1, w'2)
@@ -134,8 +151,8 @@ data Opcode where
     NCH   :: Opcode 
     SHIFT :: Opcode 
     MOVE  :: Opcode 
-    LD    :: Register NotJ -> Opcode
-    LDN   :: Register NotJ -> Opcode
+    LD    :: NotJ a => Register a -> Opcode
+    LDN   :: NotJ a => Register a -> Opcode
     ST    :: Register a -> Opcode
     STZ   :: Opcode
     JBUS  :: Opcode
@@ -145,24 +162,29 @@ data Opcode where
     JRED  :: Opcode
     JUMP  :: Opcode
     JR    :: (MaybeJ a) => Register a -> Opcode
-    IDE   :: Register NotJ -> Opcode
-    CMP   :: Register NotJ -> Opcode
+    IDE   :: (NotJ a)   => Register a -> Opcode
+    CMP   :: (NotJ a)   => Register a -> Opcode
 
 data Register a where
-    RA  :: Register NotJ
-    RX  :: Register NotJ
-    RI1 :: Register NotJ
-    RI2 :: Register NotJ
-    RI3 :: Register NotJ
-    RI4 :: Register NotJ
-    RI5 :: Register NotJ
-    RI6 :: Register NotJ
-    RJ  :: Register DefJ
-data NotJ = NotJ deriving (Eq, Show, Read)
-data DefJ = DefJ deriving (Eq, Show, Read)
+    RA  :: Register TRAX
+    RX  :: Register TRAX
+    RI1 :: Register TRIndex
+    RI2 :: Register TRIndex
+    RI3 :: Register TRIndex
+    RI4 :: Register TRIndex
+    RI5 :: Register TRIndex
+    RI6 :: Register TRIndex
+    RJ  :: Register TRJ
+data TRIndex = TRIndex
+data TRAX = TRAX
+data TRJ = TRJ
+class NotJ a where
+instance NotJ TRIndex where
+instance NotJ TRAX where
 class MaybeJ a where
-instance MaybeJ NotJ where
-instance MaybeJ DefJ where
+instance MaybeJ TRIndex where
+instance MaybeJ TRAX where
+instance MaybeJ TRJ where
 
 data ByteMode = Tens | Twos
 base :: MixMachine -> Int64
@@ -198,13 +220,13 @@ instance Wordy CheckedAddress where
     fromWord w = CheckedAddress $ fromWord w
 
 data Instruction = Instruction { iAddr :: MAddress
-                               , iIndex :: MByte
+                               , iIndex :: Maybe (Register TRIndex)
                                , iMode :: (Int8, Int8)
                                , iOpc :: Opcode
                                }
 readInstruction :: MWord -> Maybe Instruction
 readInstruction (MWord s b1 b2 b3 b4 b5) =
-    Just . Instruction (MAddress s b1 b2) b3 (decodeMode b4) =<< decodeOpcode b5
+    Just . Instruction (MAddress s b1 b2) (decodeIndex b3) (decodeMode b4) =<< decodeOpcode b5
 decodeMode :: MByte -> (Int8, Int8)
 decodeMode b = (b `quot` 8, b `rem` 8)
 decodeOpcode :: MByte -> Maybe Opcode
@@ -212,6 +234,14 @@ decodeOpcode b = opcodesInOrder `safeIndex` b
     where safeIndex [] _ = Nothing
           safeIndex (x:_) 0 = Just x
           safeIndex (_:xs) b = xs `safeIndex` (b-1)
+decodeIndex :: MByte -> Maybe (Register TRIndex)
+decodeIndex x | 0 < x && x < 7 = Just $ [RI1, RI2, RI3, RI4, RI5, RI6] !! (fromIntegral x - 1)
+decodeIndex _                  = Nothing
+
+getAddress :: MixMachine -> Instruction -> Error CheckedAddress
+getAddress m i = checkAddress m $ fromWord a
+    where offset = maybe zeroWord (getRegister m) $ iIndex i
+          a = fst $ plus (base m) (iAddr i) offset
 
 stepMachine :: MixMachine -> Error MixMachine
 stepMachine m =
@@ -220,10 +250,10 @@ stepMachine m =
         Nothing -> Left "bad instruction read"
         Just i -> case iOpc i of
             NOP   -> Right $ m { ip=add (base m) 1 $ ip m }
-            LD r  -> setRegister m r . getMemory m <$> checkAddress m (iAddr i)
-            LDN r -> setRegister m r . wNegate . getMemory m <$> checkAddress m (iAddr i)
-            ST r  -> setMemory m (getRegister m r)      <$> checkAddress m (iAddr i)
-            STZ   -> setMemory m (MWord Plus 0 0 0 0 0) <$> checkAddress m (iAddr i)
+            LD r  -> setRegister m r . getMemory m <$> getAddress m i
+            LDN r -> setRegister m r . wNegate . getMemory m <$> getAddress m i
+            ST r  -> setMemory m (getRegister m r) <$> getAddress m i
+            STZ   -> setMemory m zeroWord          <$> getAddress m i
             ADD   -> undefined
             SUB   -> undefined
             MUL   -> undefined
