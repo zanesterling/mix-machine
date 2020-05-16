@@ -7,6 +7,8 @@ import Debug.Trace
 -- IDEA: Purely functional programming means easy to keep old states b/c of pointer machine.
 --       Record every state and allow reversing etc?
 
+type Error a = Either String a
+
 data MixMachine = MixMachine { rA  :: MWord
                              , rX  :: MWord
                              , rI1 :: MOffset
@@ -48,6 +50,22 @@ setRegister m r w@(MWord s b1 b2 b3 b4 b5) =
         RI5 -> m { rI5=MOffset s b4 b5 }
         RI6 -> m { rI6=MOffset s b4 b5 }
 
+getMemory :: MixMachine -> CheckedAddress -> MWord
+getMemory m a = memory m !! addr
+    where addr = fromIntegral (toInt (fromIntegral $ base m) (toWord a))
+setMemory :: MixMachine -> MWord -> CheckedAddress -> MixMachine
+setMemory m x a = m { memory = setAt (memory m) addr x }
+    where addr = fromIntegral (toInt (fromIntegral $ base m) (toWord a))
+          setAt l i x = take i l ++ [x] ++ drop (i+1) l
+
+checkAddress :: MixMachine -> MAddress -> Error CheckedAddress
+checkAddress m a = if 0 <= a' && a' < memorySize
+                   then Right $ CheckedAddress a
+                   else Left $ "address " ++ show a ++ " out of bounds"
+    where a' = toInt (fromIntegral $ base m) $ toWord a
+          memorySize = fromIntegral $ length $ memory m
+newtype CheckedAddress = CheckedAddress MAddress
+
 data MWord = MWord { mws :: MSign
                    , mwb1 :: MByte
                    , mwb2 :: MByte
@@ -66,9 +84,9 @@ times base w1 w2 = (w'1, w'2)
           x2 = toInt base w2
           (w'1, o) = fromInt base $ x1 * x2
           (w'2, _) = fromInt base o
-negate :: MWord -> MWord
-negate (MWord Plus  b1 b2 b3 b4 b5) = MWord Minus b1 b2 b3 b4 b5
-negate (MWord Minus b1 b2 b3 b4 b5) = MWord Plus  b1 b2 b3 b4 b5
+wNegate :: MWord -> MWord
+wNegate (MWord Plus  b1 b2 b3 b4 b5) = MWord Minus b1 b2 b3 b4 b5
+wNegate (MWord Minus b1 b2 b3 b4 b5) = MWord Plus  b1 b2 b3 b4 b5
 
 toInt :: Int64 -> MWord -> Int64
 toInt base (MWord s b1 b2 b3 b4 b5) = sign s * ((((b1' * base + b2') * base + b3') * base + b4') * base + b5')
@@ -147,7 +165,7 @@ instance MaybeJ NotJ where
 instance MaybeJ DefJ where
 
 data ByteMode = Tens | Twos
-base :: MixMachine -> Int8
+base :: MixMachine -> Int64
 base m = case byteMode m of
     Tens -> 100
     Twos -> 64
@@ -163,12 +181,21 @@ opcodesInOrder = [ NOP, ADD, SUB, MUL, DIV, NCH, SHIFT, MOVE
 
 class Wordy a where
     toWord :: a -> MWord
+    fromWord :: MWord -> a
+    add :: Int64 -> Int64 -> a -> a
+    add b n w = fromWord $ fst $ fromInt b $ n + toInt b (toWord w)
 instance Wordy MWord where
     toWord = id
+    fromWord = id
 instance Wordy MOffset where
-    toWord (MOffset s b1 b2) = MWord s 0 0 0 b1 b2
+    toWord   (MOffset s     b1 b2) = MWord s 0 0 0 b1 b2
+    fromWord (MWord s _ _ _ b4 b5) = MOffset s b4 b5
 instance Wordy MAddress where
-    toWord (MAddress s b1 b2) = MWord s 0 0 0 b1 b2
+    toWord   (MAddress s    b1 b2) = MWord s 0 0 0 b1 b2
+    fromWord (MWord s _ _ _ b4 b5) = MAddress s b4 b5
+instance Wordy CheckedAddress where
+    toWord (CheckedAddress a) = toWord a
+    fromWord w = CheckedAddress $ fromWord w
 
 data Instruction = Instruction { iAddr :: MAddress
                                , iIndex :: MByte
@@ -186,13 +213,17 @@ decodeOpcode b = opcodesInOrder `safeIndex` b
           safeIndex (x:_) 0 = Just x
           safeIndex (_:xs) b = xs `safeIndex` (b-1)
 
-stepMachine :: MixMachine -> Either String MixMachine
+stepMachine :: MixMachine -> Error MixMachine
 stepMachine m =
     let instr = readInstruction $ contents m $ ip m
     in case instr of
         Nothing -> Left "bad instruction read"
         Just i -> case iOpc i of
-            NOP   -> Right $ m { ip=ip m }
+            NOP   -> Right $ m { ip=add (base m) 1 $ ip m }
+            LD r  -> setRegister m r . getMemory m <$> checkAddress m (iAddr i)
+            LDN r -> setRegister m r . wNegate . getMemory m <$> checkAddress m (iAddr i)
+            ST r  -> setMemory m (getRegister m r)      <$> checkAddress m (iAddr i)
+            STZ   -> setMemory m (MWord Plus 0 0 0 0 0) <$> checkAddress m (iAddr i)
             ADD   -> undefined
             SUB   -> undefined
             MUL   -> undefined
@@ -200,10 +231,6 @@ stepMachine m =
             NCH   -> undefined
             SHIFT -> undefined
             MOVE  -> undefined
-            LD r  -> undefined
-            LDN r -> undefined
-            ST r  -> undefined
-            STZ   -> undefined
             JBUS  -> undefined
             IOC   -> undefined
             IN    -> undefined
@@ -215,7 +242,7 @@ stepMachine m =
             CMP r -> undefined
     where contents m p = memory m !! fromIntegral (toNumber (base m) p)
           toNumber b (MAddress s b1 b2) =
-              (case s of Plus -> 1; Minus -> -1) * (b1 * b + b2)
+              (case s of Plus -> 1; Minus -> -1) * (b1 * fromIntegral b + b2)
 
 someFunc :: IO ()
 someFunc = putStrLn "someFunc"
