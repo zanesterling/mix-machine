@@ -16,8 +16,14 @@ stepMachine m = do
       LDN r -> incIp =<< setRegister m r . wNegate . getMemory m f <$> getAddress m instr
       ST r  -> incIp =<< setMemory m f (getRegister m r) <$> getAddress m instr
       STZ   -> incIp =<< setMemory m f zeroWord          <$> getAddress m instr
-      ADD   -> undefined
-      SUB   -> undefined
+      ADD   -> do
+        v <- getMemory m f <$> getAddress m instr
+        let (sum, overflow) = plus (base m) v $ getRegister m RA
+        incIp $ setRegister (m { overflow=overflow }) RA sum
+      SUB   -> do
+        v <- wNegate . getMemory m f <$> getAddress m instr
+        let (sum, overflow) = plus (base m) v $ getRegister m RA
+        incIp $ setRegister (m { overflow=overflow }) RA sum
       MUL   -> undefined
       DIV   -> undefined
       NCH   -> undefined
