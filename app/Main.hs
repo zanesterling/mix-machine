@@ -3,4 +3,4 @@ module Main where
 import Mix
 
 main :: IO ()
-main = someFunc
+main = undefined

@@ -3,7 +3,8 @@ module MixInternal ( Error
 
                    --- NUMBERS ---
                    , Wordy (toWord, fromWord)
-                   , MWord
+                   , MWord (MWord)
+                   , MByte
                    , zeroWord
                    , MOffset
                    , MAddress
