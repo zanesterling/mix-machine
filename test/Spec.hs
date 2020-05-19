@@ -8,8 +8,8 @@ import MixInternal
 import Mix
 
 main :: IO ()
-main = hspec $ do
-    describe "Mix" $ do
+main = hspec $ 
+    describe "MixInternal" $ do
         describe "getField" $ do
             let w = MWord Minus 1 2 3 5 4
             it "is identity with full field" $
@@ -41,7 +41,6 @@ main = hspec $ do
             it "can set sign and first byte" $
                 setField (0, 1) dst src `shouldBe` MWord Plus  0 2 3 4 5
 
-    describe "MixInternal" $ do
         describe "toInt" $ do
             it "converts Plus 53 21 to 5321" $
                 toInt 100 (MWord Plus 0 0 0 53 21) `shouldBe` (5321 :: Int64)

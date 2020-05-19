@@ -22,7 +22,7 @@ module MixInternal ( Error
                    , base
                    , makeMachine
                    , getRegister, setRegister
-                   , getMemory, setMemory
+                   , getMemory, getMemory', setMemory, setMemory'
                    , memsize
                    , CheckedAddress
                    , checkAddress
@@ -37,6 +37,10 @@ module MixInternal ( Error
                    , TRJ
                    , MaybeJ
                    , NotJ
+
+                   --- FIELD operations ---
+                   , getField
+                   , setField
                    ) where
 
 import Data.Int (Int8, Int64)
@@ -183,13 +187,17 @@ setRegister m r w@(MWord s b1 b2 b3 b4 b5) =
 memsize :: MixMachine -> Int64
 memsize = fromIntegral . length . memory
 
-getMemory :: MixMachine -> CheckedAddress -> MWord
-getMemory m a = memory m !! addr
+getMemory :: MixMachine -> Field -> CheckedAddress -> MWord
+getMemory m f a = getField f (memory m !! addr)
     where addr = fromIntegral (toInt (fromIntegral $ base m) (toWord a))
-setMemory :: MixMachine -> MWord -> CheckedAddress -> MixMachine
-setMemory m x a = m { memory = setAt (memory m) addr x }
-    where addr = fromIntegral (toInt (fromIntegral $ base m) (toWord a))
+getMemory' m = getMemory m (0, 5)
+
+setMemory :: MixMachine -> Field -> MWord -> CheckedAddress -> MixMachine
+setMemory m f x a = m { memory = setAt (memory m) addr $ setField f y x }
+    where addr = fromIntegral (toInt (fromIntegral $ base m) (toWord a)) -- TODO: simplify
           setAt l i x = take i l ++ [x] ++ drop (i+1) l
+          y = getMemory' m a
+setMemory' m = setMemory m (0, 5)
 
 checkAddress :: MixMachine -> MAddress -> Error CheckedAddress
 checkAddress m a = if 0 <= a' && a' < memorySize
@@ -209,9 +217,10 @@ base m = case byteMode m of
 
 --- INSTRUCTION ---
 
+type Field = (MByte, MByte)
 data Instruction = Instruction { iAddr :: MAddress
                                , iIndex :: Maybe (Register TRIndex)
-                               , iMode :: (MByte, MByte)
+                               , iMode :: Field
                                , iOpc :: Opcode
                                }
 
@@ -350,3 +359,34 @@ class MaybeJ a where
 instance MaybeJ TRIndex where
 instance MaybeJ TRAX where
 instance MaybeJ TRJ where
+
+
+--- FIELD operations ---
+
+getField :: (MByte, MByte) -> MWord -> MWord
+getField (l, r) w@(MWord s _ _ _ _ _) =
+  listToWord s' $ extend $ sub1 (max l 1) r $ wordToList w
+  where s' = if l == 0 then s else Plus
+        sub1 l r = sub0 (fromIntegral l-1) (fromIntegral r-1)
+        sub0 l r xs = take (r-l+1) $ drop l xs
+
+setField :: (MByte, MByte) -> MWord -> MWord -> MWord
+setField (l, r) dst@(MWord sDst _ _ _ _ _) src@(MWord sSrc _ _ _ _ _) =
+  listToWord s' $ extend $ setAt (max l' 1 - 1) (wordToList dst) $ takeLast n $ wordToList src
+  where s' = if l == 0 then sSrc else sDst
+        n = r' - max 1 l' + 1
+        (l', r') = (fromIntegral l, fromIntegral r)
+        setAt i dst src = take i dst ++ src ++ drop (i + length src) dst
+  
+wordToList :: MWord -> [MByte]
+wordToList (MWord _ b1 b2 b3 b4 b5) = [b1, b2, b3, b4, b5]
+
+newtype CheckedList = CheckedList [MByte]
+listToWord :: MSign -> CheckedList -> MWord
+listToWord s (CheckedList [b1, b2, b3, b4, b5]) = MWord s b1 b2 b3 b4 b5
+
+extend :: [MByte] -> CheckedList
+extend l = CheckedList $ takeLast 5 ([0, 0, 0, 0, 0] ++ l)
+
+takeLast :: Int -> [a] -> [a]
+takeLast n l = drop (length l - n) l
