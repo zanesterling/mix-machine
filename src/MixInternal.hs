@@ -7,7 +7,7 @@ module MixInternal ( Error
                    , MByte
                    , zeroWord
                    , MOffset
-                   , MAddress
+                   , MAddress (MAddress)
                    , MSign (Plus, Minus)
                    , MComparison
                    , toInt, fromInt
@@ -26,9 +26,10 @@ module MixInternal ( Error
                    , memsize
                    , CheckedAddress
                    , checkAddress
+                   , ByteMode (Tens, Twos)
 
                    --- INSTRUCTION ---
-                   , Instruction (iAddr, iIndex, iMode, iOpc)
+                   , Instruction (Instruction, iAddr, iIndex, iMode, iOpc)
                    , readInstruction, writeInstruction
                    , Register (RA, RX, RI1, RI2, RI3, RI4, RI5, RI6, RJ)
                    , Opcode (NOP, ADD, SUB, MUL, DIV, NCH, SHIFT, MOVE, LD, LDN, ST, STZ, JBUS, IOC, IN, OUT, JRED, JUMP, JR, IDE, CMP)
@@ -50,23 +51,11 @@ type Error a = Either String a
 
 --- NUMBERS ---
 
-data MWord = MWord { mws :: MSign
-                   , mwb1 :: MByte
-                   , mwb2 :: MByte
-                   , mwb3 :: MByte
-                   , mwb4 :: MByte
-                   , mwb5 :: MByte
-                   } deriving (Eq, Show, Read)
+data MWord = MWord MSign MByte MByte MByte MByte MByte deriving (Eq, Show, Read)
 zeroWord = MWord Plus 0 0 0 0 0
 
-data MOffset = MOffset { mos :: MSign
-                       , mob1 :: MByte
-                       , mob2 :: MByte
-                       } deriving (Eq, Show, Read)
-data MAddress = MAddress { mas :: MSign
-                         , mab1 :: MByte
-                         , mab2 :: MByte
-                         } deriving (Eq, Show, Read)
+data MOffset = MOffset MSign MByte MByte deriving (Eq, Show, Read)
+data MAddress = MAddress MSign MByte MByte deriving (Eq, Show, Read)
 data MSign = Plus | Minus deriving (Eq, Show, Read)
 type MByte = Int8
 data MComparison = Less | Equal | Greater deriving (Eq, Show, Read)
@@ -143,7 +132,7 @@ data MixMachine = MixMachine { rA  :: MWord
                              , overflow :: Bool
                              , compareFlag :: MComparison
                              , byteMode :: ByteMode
-                             }
+                             } deriving (Show)
 makeMachine memsize bm = MixMachine { rA =zeroWord
                                     , rX =zeroWord
                                     , rI1=fromWord zeroWord
@@ -205,10 +194,10 @@ checkAddress m a = if 0 <= a' && a' < memorySize
                    else Left $ "address " ++ show a ++ " out of bounds"
     where a' = toInt (fromIntegral $ base m) $ toWord a
           memorySize = fromIntegral $ length $ memory m
-newtype CheckedAddress = CheckedAddress MAddress
+newtype CheckedAddress = CheckedAddress MAddress deriving (Eq, Show, Read)
 
 
-data ByteMode = Tens | Twos
+data ByteMode = Tens | Twos deriving (Eq, Show, Read)
 base :: MixMachine -> Int64
 base m = case byteMode m of
     Tens -> 100
@@ -222,7 +211,7 @@ data Instruction = Instruction { iAddr :: MAddress
                                , iIndex :: Maybe (Register TRIndex)
                                , iMode :: Field
                                , iOpc :: Opcode
-                               }
+                               } deriving (Show)
 
 readInstruction :: MWord -> Error Instruction
 readInstruction (MWord s b1 b2 b3 b4 b5) =
@@ -327,7 +316,7 @@ data Opcode where
     MOVE  :: Opcode
     LD    :: NotJ a => Register a -> Opcode
     LDN   :: NotJ a => Register a -> Opcode
-    ST    :: Register a -> Opcode
+    ST    :: Show a => Register a -> Opcode
     STZ   :: Opcode
     JBUS  :: Opcode
     IOC   :: Opcode
@@ -338,6 +327,28 @@ data Opcode where
     JR    :: (MaybeJ a) => Register a -> Opcode
     IDE   :: (NotJ a)   => Register a -> Opcode
     CMP   :: (NotJ a)   => Register a -> Opcode
+instance Show Opcode where
+    show NOP   = "NOP"
+    show ADD   = "ADD"
+    show SUB   = "SUB"
+    show MUL   = "MUL"
+    show DIV   = "DIV"
+    show NCH   = "NCH"
+    show SHIFT = "SHIFT"
+    show MOVE  = "MOVE"
+    show (LD r)  = "LD " ++ show r
+    show (LDN r) = "LDN " ++ show r
+    show (ST r)  = "ST " ++ show r
+    show STZ   = "STZ"
+    show JBUS  = "JBUS"
+    show IOC   = "IOC"
+    show IN    = "IN"
+    show OUT   = "OUT"
+    show JRED  = "JRED"
+    show JUMP  = "JUMP"
+    show (JR r) = "JR " ++ show r
+    show (IDE r) = "IDE " ++ show r
+    show (CMP r) = "CMP " ++ show r
 
 data Register a where
     RA  :: Register TRAX
@@ -349,13 +360,24 @@ data Register a where
     RI5 :: Register TRIndex
     RI6 :: Register TRIndex
     RJ  :: Register TRJ
-data TRIndex = TRIndex deriving (Eq)
-data TRAX = TRAX deriving (Eq)
-data TRJ = TRJ deriving (Eq)
-class NotJ a where
+instance Show a => Show (Register a) where
+    show RA = "RA"
+    show RX = "RX"
+    show RJ = "RJ"
+    show RI1 = "RI1"
+    show RI2 = "RI2"
+    show RI3 = "RI3"
+    show RI4 = "RI4"
+    show RI5 = "RI5"
+    show RI6 = "RI6"
+
+data TRIndex = TRIndex deriving (Eq, Show, Read)
+data TRAX = TRAX deriving (Eq, Show, Read)
+data TRJ = TRJ deriving (Eq, Show, Read)
+class Show a => NotJ a where
 instance NotJ TRIndex where
 instance NotJ TRAX where
-class MaybeJ a where
+class Show a => MaybeJ a where
 instance MaybeJ TRIndex where
 instance MaybeJ TRAX where
 instance MaybeJ TRJ where

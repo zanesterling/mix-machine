@@ -3,12 +3,13 @@ import Test.QuickCheck
 import Test.QuickCheck.Gen
 import Control.Exception (evaluate)
 import Data.Int (Int8, Int64)
+import Data.Either (fromRight, isRight)
 
 import MixInternal
 import Mix
 
 main :: IO ()
-main = hspec $ 
+main = hspec $ do
     describe "MixInternal" $ do
         describe "getField" $ do
             let w = MWord Minus 1 2 3 5 4
@@ -63,3 +64,44 @@ main = hspec $
             it "is the identity function" $
                 forAll ((,) <$> choose (2, 128) <*> choose (-128^5+1, 128^5-1)) $
                 \(b, x) -> abs x < b^5 ==> toInt b (fst $ fromInt b x) == x
+
+    describe "Mix" $ do
+        let m = setRegister (makeMachine 10 Tens) RA $ fst $ fromInt 100 1
+        let (Right ca0) = checkAddress m (fromWord $ fst $ fromInt 100 0)
+        let (Right ca1) = checkAddress m (fromWord $ fst $ fromInt 100 1)
+        let m' = setMemory' m (fst $ fromInt (base m) 2) ca1
+        describe "LD" $ do
+            let ldaInstr = writeInstruction $ Instruction (fromWord $ fst $ fromInt (base m') 1) Nothing (0, 5) (LD RA)
+            let mm = stepMachine $ setMemory' m' ldaInstr ca0
+            it "succeeds" $
+                isRight mm `shouldBe` True
+            let (Right mm') = mm
+            it "loads into RA" $
+                toInt (base mm') (getRegister mm' RA) `shouldBe` 2
+
+        describe "ST" $ do
+            let staInstr = writeInstruction $ Instruction (fromWord $ fst $ fromInt (base m') 1) Nothing (0, 5) (ST RA)
+            let mm = stepMachine $ setMemory' m' staInstr ca0
+            it "succeeds" $
+                isRight mm `shouldBe` True
+            let (Right mm') = mm
+            it "stores RA to memory address 1" $
+                toInt (base mm') (getMemory mm' (0, 5) ca1) `shouldBe` 1
+
+        describe "ADD" $ do
+            let addInstr = writeInstruction $ Instruction (fromWord $ fst $ fromInt (base m') 1) Nothing (0, 5) ADD
+            let mm = stepMachine $ setMemory' m' addInstr ca0
+            it "succeeds" $
+                isRight mm `shouldBe` True
+            let (Right mm') = mm
+            it "adds two things together" $
+                toInt (base mm') (getRegister mm' RA) `shouldBe` 3
+
+        describe "SUB" $ do
+            let subInstr = writeInstruction $ Instruction (fromWord $ fst $ fromInt (base m') 1) Nothing (0, 5) SUB
+            let mm = stepMachine $ setMemory' m' subInstr ca0
+            it "succeeds" $
+                isRight mm `shouldBe` True
+            let (Right mm') = mm
+            it "subtracts memory from RA" $
+                toInt (base mm') (getRegister mm' RA) `shouldBe` -1
