@@ -315,6 +315,8 @@ opcodeToInt (CMP RI4) = 60
 opcodeToInt (CMP RI5) = 61
 opcodeToInt (CMP RI6) = 62
 opcodeToInt (CMP RX)  = 63
+instance Eq Opcode where
+    o1 == o2 = opcodeToInt o1 == opcodeToInt o2
 
 data Opcode where
     NOP   :: Opcode
