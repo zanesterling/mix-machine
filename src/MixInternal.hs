@@ -9,13 +9,14 @@ module MixInternal ( Error
                    , MOffset
                    , MAddress (MAddress)
                    , MSign (Plus, Minus)
-                   , MComparison
+                   , MComparison (Less, Greater, Equal)
                    , toInt, fromInt
                    , asInt
                    , mash
                    , plus
                    , times
                    , wNegate
+                   , wCompare
 
                    --- MIX MACHINE ---
                    , MixMachine (overflow, ip, compareFlag)
@@ -59,6 +60,11 @@ data MAddress = MAddress MSign MByte MByte deriving (Eq, Show, Read)
 data MSign = Plus | Minus deriving (Eq, Show, Read)
 type MByte = Int8
 data MComparison = Less | Equal | Greater deriving (Eq, Show, Read)
+wCompare :: (Wordy a, Wordy b) => Int64 -> a -> b -> MComparison
+wCompare b wa wb = case toInt b (toWord wa) - toInt b (toWord wb) of
+    x | x <  0 -> Less
+    x | x == 0 -> Equal
+    x | x >  0 -> Greater
 
 class Wordy a where
     toWord :: a -> MWord
