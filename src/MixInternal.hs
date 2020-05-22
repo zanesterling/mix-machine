@@ -63,6 +63,11 @@ data MComparison = Less | Equal | Greater deriving (Eq, Show, Read)
 class Wordy a where
     toWord :: a -> MWord
     fromWord :: MWord -> a
+    -- This is the easiest way to implement the ADD operator, but it is not the most accurate.
+    -- Knuth shows on page 132 that you can do addition on words packed with multiple numbers
+    -- as long as you are careful. The mechanism is that each byte is added with the matching
+    -- byte, and they overflow to the next byte only if their value gets too large. Let that
+    -- be a TODO.
     add :: Int64 -> Int64 -> a -> a
     add b n w = fromWord $ fst $ fromInt b $ n + toInt b (toWord w)
 instance Wordy MWord where
