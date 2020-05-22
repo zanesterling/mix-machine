@@ -1,5 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module Mix where
+module MixEngine where
 
 import MixInternal
 

@@ -6,7 +6,7 @@ import Data.Int (Int8, Int64)
 import Data.Either (fromRight, isRight)
 
 import MixInternal
-import Mix
+import MixEngine
 
 main :: IO ()
 main = hspec $ do
@@ -65,7 +65,7 @@ main = hspec $ do
                 forAll ((,) <$> choose (2, 128) <*> choose (-128^5+1, 128^5-1)) $
                 \(b, x) -> abs x < b^5 ==> toInt b (fst $ fromInt b x) == x
 
-    describe "Mix" $ do
+    describe "MixEngine" $ do
         let m0 = makeMachine 10 Tens
         let b = base m0
         let (Right ca0) = checkAddress m0 (fromWord $ fst $ fromInt b 0)

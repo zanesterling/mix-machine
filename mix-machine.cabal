@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 4552db2419a38ed1e70c42edd407dcb38b51cc168186ad9c988d35d25a72a512
+-- hash: 47ab35ea8d2ac9cc1c8e55e19d0c6fbed0e55a49b70bbf7facebfcd60eae19df
 
 name:           mix-machine
 version:        0.1.0.0
@@ -27,7 +27,7 @@ source-repository head
 
 library
   exposed-modules:
-      Mix
+      MixEngine
       MixInternal
   other-modules:
       Paths_mix_machine
